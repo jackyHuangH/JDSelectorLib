@@ -8,6 +8,8 @@ package com.zr.addressselector.model;
  */
 public class JdVillage {
     public String id;
-    public String streetId;
+    public String parentId;
     public String name;
+    //当前层级，省1，市2，区县3，街道4，村5
+    public int grade;
 }

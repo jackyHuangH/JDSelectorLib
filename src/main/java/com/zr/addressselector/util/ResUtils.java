@@ -3,7 +3,9 @@ package com.zr.addressselector.util;
 import android.content.Context;
 
 /**
- * Created by zr on 2017/2/5.
+ *
+ * @author zr
+ * @date 2017/2/5
  */
 
 public class ResUtils {

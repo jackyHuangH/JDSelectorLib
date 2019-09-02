@@ -10,33 +10,37 @@ import com.zr.addressselector.listener.OnAddressSelectedListener;
 import com.zr.addressselector.util.ResUtils;
 
 
-public class JDSelectorDialog extends Dialog {
+/**
+ * @author HZJ
+ */
+public class JdSelectorDialog extends Dialog {
 
-    public JDAddressSelector getSelector() {
-        return selector;
+    public JdAddressSelector getSelector() {
+        return mSelector;
     }
 
-    private JDAddressSelector selector;
+    private JdAddressSelector mSelector;
+    /***JdSelectDialog关闭的时候是否清空缓存，默认为false***/
+    private boolean mClearCacheWhenDismiss = false;
 
-    public JDSelectorDialog(Context context) {
-        super(context, R.style.bottom_dialog);
-        init(context);
+    public JdSelectorDialog(Context context) {
+        this(context, R.style.bottom_dialog);
     }
 
-    public JDSelectorDialog(Context context, int themeResId) {
+    public JdSelectorDialog(Context context, int themeResId) {
         super(context, themeResId);
         init(context);
     }
 
-    public JDSelectorDialog(Context context, boolean cancelable, OnCancelListener cancelListener) {
-        super(context, cancelable, cancelListener);
-        init(context);
+    public JdSelectorDialog(Context context, boolean clearCacheWhenDismiss) {
+        this(context, R.style.bottom_dialog);
+        this.mClearCacheWhenDismiss = clearCacheWhenDismiss;
     }
 
     private void init(Context context) {
-        selector = new JDAddressSelector(context);
+        mSelector = new JdAddressSelector(context);
 
-        setContentView(selector.getView());
+        setContentView(mSelector.getmSelectorView());
 
         Window window = getWindow();
         WindowManager.LayoutParams params = window.getAttributes();
@@ -46,7 +50,7 @@ public class JDSelectorDialog extends Dialog {
 
         window.setGravity(Gravity.BOTTOM);
 
-        selector.setOnCloseClickListener(new JDAddressSelector.OnCloseClickListener() {
+        mSelector.setOnCloseClickListener(new JdAddressSelector.OnCloseClickListener() {
             @Override
             public void onCloseClick() {
                 dismiss();
@@ -55,16 +59,16 @@ public class JDSelectorDialog extends Dialog {
     }
 
     public void setOnAddressSelectedListener(OnAddressSelectedListener listener) {
-        this.selector.setOnAddressSelectedListener(listener);
+        this.mSelector.setOnAddressSelectedListener(listener);
     }
 
-    public static JDSelectorDialog show(Context context) {
+    public static JdSelectorDialog show(Context context) {
         return show(context, null);
     }
 
-    public static JDSelectorDialog show(Context context, OnAddressSelectedListener listener) {
-        JDSelectorDialog dialog = new JDSelectorDialog(context, R.style.bottom_dialog);
-        dialog.selector.setOnAddressSelectedListener(listener);
+    public static JdSelectorDialog show(Context context, OnAddressSelectedListener listener) {
+        JdSelectorDialog dialog = new JdSelectorDialog(context, R.style.bottom_dialog);
+        dialog.mSelector.setOnAddressSelectedListener(listener);
         dialog.show();
 
         return dialog;
@@ -73,6 +77,8 @@ public class JDSelectorDialog extends Dialog {
     @Override
     public void dismiss() {
         super.dismiss();
-        this.selector.clearCacheData();
+        if (mClearCacheWhenDismiss) {
+            this.mSelector.clearCacheData();
+        }
     }
 }
