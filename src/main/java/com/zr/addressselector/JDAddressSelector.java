@@ -252,9 +252,8 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         this.mTvConfirmClose.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                //回调
-                if (mTabIndex >= 1) {
-//                    selectDeep = mTabIndex - 1;
+                //至少省级选择了一个才触发回调
+                if (mProvinceSelectIndex != INDEX_INVALID) {
                     callbackInternal();
                 }
                 if (null != onCloseClickListener) {
