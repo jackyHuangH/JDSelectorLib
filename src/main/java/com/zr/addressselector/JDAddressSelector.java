@@ -4,9 +4,8 @@ import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
-import android.os.Message;
+import android.support.annotation.Nullable;
+import android.support.v4.view.animation.FastOutSlowInInterpolator;
 import android.util.ArrayMap;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -18,9 +17,6 @@ import android.widget.ListAdapter;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-
-import androidx.annotation.Nullable;
-import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 
 import com.zr.addressselector.listener.OnAddressSelectedListener;
 import com.zr.addressselector.model.JdCity;
@@ -69,6 +65,7 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
     private TextView mTvTabVillage;
 
     private ProgressBar mLoadingPb;
+    private TextView mTvCancel;
     private TextView mTvConfirmClose;
 
     private ListView mListView;
@@ -111,106 +108,6 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
     /***当前tab所在位置，默认在省0***/
     private int mTabIndex = INDEX_TAB_PROVINCE;
 
-    private Handler mHandler = new Handler(Looper.getMainLooper()) {
-        @Override
-        public void handleMessage(Message msg) {
-            super.handleMessage(msg);
-            switch (msg.what) {
-                case WHAT_PROVINCES_PROVIDED:
-                    //更新--省--数据
-                    mProvinceData = (List<JdProvince>) msg.obj;
-                    mProvinceAdapter.notifyDataSetChanged();
-                    mListView.setAdapter(mProvinceAdapter);
-                    break;
-                case WHAT_CITIES_PROVIDED:
-                    //更新--市--数据
-                    mCityData = (List<JdCity>) msg.obj;
-                    mCityAdapter.notifyDataSetChanged();
-                    if (ListUtils.notEmpty(mCityData)) {
-                        // 以次级内容更新列表
-                        mListView.setAdapter(mCityAdapter);
-                        // 更新索引为次级
-                        mTabIndex = INDEX_TAB_CITY;
-
-                        // 缓存省-市数据
-                        String provinceId = mCityData.get(0).parentId;
-                        if (!mProvince2city.containsKey(provinceId)) {
-                            List<JdCity> cityList = new ArrayList<>();
-                            ListUtils.copy(mCityData, cityList);
-                            mProvince2city.put(provinceId, cityList);
-                        }
-
-                    } else {
-                        // 次级无内容，回调
-                        callbackInternal();
-                    }
-                    break;
-                case WHAT_COUNTIES_PROVIDED:
-                    //更新--区--数据
-                    mCountyData = (List<JdCounty>) msg.obj;
-                    mCountyAdapter.notifyDataSetChanged();
-                    if (ListUtils.notEmpty(mCountyData)) {
-                        mListView.setAdapter(mCountyAdapter);
-                        mTabIndex = INDEX_TAB_COUNTY;
-                        // 缓存市-区数据
-                        String cityId = mCountyData.get(0).parentId;
-                        if (!mCity2county.containsKey(cityId)) {
-                            List<JdCounty> countyList = new ArrayList<>();
-                            ListUtils.copy(mCountyData, countyList);
-                            mCity2county.put(cityId, countyList);
-                        }
-                    } else {
-                        callbackInternal();
-                    }
-                    break;
-                case WHAT_STREETS_PROVIDED:
-                    //更新--街道--数据
-                    mStreetData = (List<JdStreet>) msg.obj;
-                    mStreetAdapter.notifyDataSetChanged();
-                    if (ListUtils.notEmpty(mStreetData)) {
-                        mListView.setAdapter(mStreetAdapter);
-                        mTabIndex = INDEX_TAB_STREET;
-                        // 缓存区-街道数据
-                        String countryId = mStreetData.get(0).parentId;
-                        if (!mCounty2street.containsKey(countryId)) {
-                            List<JdStreet> streetList = new ArrayList<>();
-                            ListUtils.copy(mStreetData, streetList);
-                            mCounty2street.put(countryId, streetList);
-                        }
-                    } else {
-                        callbackInternal();
-                    }
-                    break;
-                case WHAT_VILLAGES_PROVIDED:
-                    //更新--村--数据
-                    mVillageData = (List<JdVillage>) msg.obj;
-                    mVillageAdapter.notifyDataSetChanged();
-                    if (ListUtils.notEmpty(mVillageData)) {
-                        // 以次级内容更新列表
-                        mListView.setAdapter(mVillageAdapter);
-                        // 更新索引为次级
-                        mTabIndex = INDEX_TAB_VILLAGE;
-                        // 缓存街道-村数据
-                        String streetId = mVillageData.get(0).parentId;
-                        if (!mStreet2Village.containsKey(streetId)) {
-                            List<JdVillage> villageList = new ArrayList<>();
-                            ListUtils.copy(mVillageData, villageList);
-                            mStreet2Village.put(streetId, villageList);
-                        }
-                    } else {
-                        // 次级无内容，回调
-                        callbackInternal();
-                    }
-                    break;
-                default:
-                    break;
-            }
-            updateTabsVisibility();
-            updateProgressVisibility();
-            updateIndicator();
-        }
-    };
-
     public JdAddressSelector(Context context) {
         this.mContext = context;
         initViews();
@@ -239,7 +136,8 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         this.mTvTabStreet = (TextView) mSelectorView.findViewById(R.id.textViewStreet);
         this.mTvTabVillage = (TextView) mSelectorView.findViewById(R.id.textViewVillage);
 
-        this.mTvConfirmClose = (TextView) mSelectorView.findViewById(R.id.jd_close);
+        this.mTvCancel = (TextView) mSelectorView.findViewById(R.id.jd_cancel);
+        this.mTvConfirmClose = (TextView) mSelectorView.findViewById(R.id.jd_confirm);
 
         this.mTvTabProvince.setOnClickListener(new OnProvinceTabClickListener());
         this.mTvTabCity.setOnClickListener(new OnCityTabClickListener());
@@ -249,25 +147,30 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
 
         this.mListView.setOnItemClickListener(this);
 
+        this.mTvCancel.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //取消地区选择
+                if (mJdCancelClickListener!=null) {
+                    mJdCancelClickListener.onCancel();
+                }
+            }
+        });
+
         this.mTvConfirmClose.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                //回调
-                if (mTabIndex >= 1) {
-//                    selectDeep = mTabIndex - 1;
+                //至少省级选择了之后才触发回调
+                if (mProvinceSelectIndex != INDEX_INVALID) {
                     callbackInternal();
                 }
-                if (null != onCloseClickListener) {
-                    onCloseClickListener.onCloseClick();
+                if (null != mOnJdConfirmClickListener) {
+                    mOnJdConfirmClickListener.onJdConfirmClick();
                 }
             }
         });
         updateIndicator();
         mLoadingPb.setVisibility(View.VISIBLE);
-    }
-
-    public View getmSelectorView() {
-        return mSelectorView;
     }
 
     private void updateIndicator() {
@@ -323,11 +226,9 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         public void onClick(View v) {
             mTabIndex = INDEX_TAB_PROVINCE;
             mListView.setAdapter(mProvinceAdapter);
-
             if (mProvinceSelectIndex != INDEX_INVALID) {
                 mListView.setSelection(mProvinceSelectIndex);
             }
-
             updateTabsVisibility();
             updateIndicator();
         }
@@ -338,11 +239,9 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         public void onClick(View v) {
             mTabIndex = INDEX_TAB_CITY;
             mListView.setAdapter(mCityAdapter);
-
             if (mCitySelectIndex != INDEX_INVALID) {
                 mListView.setSelection(mCitySelectIndex);
             }
-
             updateTabsVisibility();
             updateIndicator();
         }
@@ -353,11 +252,9 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         public void onClick(View v) {
             mTabIndex = INDEX_TAB_COUNTY;
             mListView.setAdapter(mCountyAdapter);
-
             if (mCountySelectIndex != INDEX_INVALID) {
                 mListView.setSelection(mCountySelectIndex);
             }
-
             updateTabsVisibility();
             updateIndicator();
         }
@@ -368,11 +265,9 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         public void onClick(View v) {
             mTabIndex = INDEX_TAB_STREET;
             mListView.setAdapter(mStreetAdapter);
-
             if (mStreetSelectIndex != INDEX_INVALID) {
                 mListView.setSelection(mStreetSelectIndex);
             }
-
             updateTabsVisibility();
             updateIndicator();
         }
@@ -383,16 +278,17 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         public void onClick(View v) {
             mTabIndex = INDEX_TAB_VILLAGE;
             mListView.setAdapter(mVillageAdapter);
-
             if (mVillageSelectIndex != INDEX_INVALID) {
                 mListView.setSelection(mVillageSelectIndex);
             }
-
             updateTabsVisibility();
             updateIndicator();
         }
     }
 
+    /**
+     * 更新五级tab显示隐藏状态
+     */
     private void updateTabsVisibility() {
         mTvTabProvince.setVisibility(ListUtils.notEmpty(mProvinceData) ? View.VISIBLE : View.GONE);
         mTvTabCity.setVisibility(ListUtils.notEmpty(mCityData) ? View.VISIBLE : View.GONE);
@@ -407,6 +303,13 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         mTvTabVillage.setEnabled(mTabIndex != INDEX_TAB_VILLAGE);
     }
 
+    /**
+     * 各级列表点击事件
+     * @param parent
+     * @param view
+     * @param position
+     * @param id
+     */
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
         switch (mTabIndex) {
@@ -447,32 +350,26 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
                     mLoadingPb.setVisibility(View.VISIBLE);
                     mOnSelectedListener.onProvinceSelected(province);
                 }
-
                 break;
 
             case INDEX_TAB_CITY:
                 JdCity city = mCityAdapter.getItem(position);
-
                 mTvTabCity.setText(city.name);
                 mTvTabCounty.setText(TEXT_UNCHECKED);
                 mTvTabStreet.setText(TEXT_UNCHECKED);
                 mTvTabVillage.setText(TEXT_UNCHECKED);
-
                 mCountyData = null;
                 mStreetData = null;
                 mVillageData = null;
                 mCountyAdapter.notifyDataSetChanged();
                 mStreetAdapter.notifyDataSetChanged();
                 mVillageAdapter.notifyDataSetChanged();
-
                 this.mCitySelectIndex = position;
                 this.mCountySelectIndex = INDEX_INVALID;
                 this.mStreetSelectIndex = INDEX_INVALID;
                 this.mVillageSelectIndex = INDEX_INVALID;
-
                 mCityAdapter.notifyDataSetChanged();
                 System.out.println(mCity2county.toString());
-
                 // 有缓存则直接使用缓存,否则去重新请求
                 if (mCity2county.containsKey(city.id)) {
                     System.out.println("parentId = " + city.id);
@@ -481,27 +378,21 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
                     mLoadingPb.setVisibility(View.VISIBLE);
                     mOnSelectedListener.onCitySelected(city);
                 }
-
                 break;
 
             case INDEX_TAB_COUNTY:
                 JdCounty county = mCountyAdapter.getItem(position);
-
                 mTvTabCounty.setText(county.name);
                 mTvTabStreet.setText(TEXT_UNCHECKED);
                 mTvTabVillage.setText(TEXT_UNCHECKED);
-
                 mStreetData = null;
                 mVillageData = null;
                 mStreetAdapter.notifyDataSetChanged();
                 mVillageAdapter.notifyDataSetChanged();
-
                 this.mCountySelectIndex = position;
                 this.mStreetSelectIndex = INDEX_INVALID;
                 this.mVillageSelectIndex = INDEX_INVALID;
-
                 mCountyAdapter.notifyDataSetChanged();
-
                 // 有缓存则直接使用缓存,否则去重新请求
                 if (mCounty2street.containsKey(county.id)) {
                     setStreets(mCounty2street.get(county.id));
@@ -509,21 +400,16 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
                     mLoadingPb.setVisibility(View.VISIBLE);
                     mOnSelectedListener.onCountySelected(county);
                 }
-
                 break;
 
             case INDEX_TAB_STREET:
                 JdStreet street = mStreetAdapter.getItem(position);
-
                 mTvTabStreet.setText(street.name);
                 mTvTabVillage.setText(TEXT_UNCHECKED);
-
                 mVillageData = null;
                 mVillageAdapter.notifyDataSetChanged();
-
                 this.mStreetSelectIndex = position;
                 this.mVillageSelectIndex = INDEX_INVALID;
-
                 mStreetAdapter.notifyDataSetChanged();
                 // 有缓存则直接使用缓存,否则去重新请求
                 if (mStreet2Village.containsKey(street.id)) {
@@ -557,7 +443,6 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
             JdCounty county = mCountyData == null || mCountySelectIndex == INDEX_INVALID ? null : mCountyData.get(mCountySelectIndex);
             JdStreet street = mStreetData == null || mStreetSelectIndex == INDEX_INVALID ? null : mStreetData.get(mStreetSelectIndex);
             JdVillage village = mVillageData == null || mVillageSelectIndex == INDEX_INVALID ? null : mVillageData.get(mVillageSelectIndex);
-
             mOnSelectedListener.onAddressSelected(province, city, county, street, village);
         }
     }
@@ -588,26 +473,20 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             Holder holder;
-
             if (convertView == null) {
                 convertView = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_area, parent, false);
-
                 holder = new Holder();
                 holder.textView = (TextView) convertView.findViewById(R.id.textView);
                 holder.imageViewCheckMark = (ImageView) convertView.findViewById(R.id.imageViewCheckMark);
-
                 convertView.setTag(holder);
             } else {
                 holder = (Holder) convertView.getTag();
             }
-
             JdProvince item = getItem(position);
             holder.textView.setText(item.name);
-
             boolean checked = mProvinceSelectIndex != INDEX_INVALID && mProvinceData.get(mProvinceSelectIndex).id.equals(item.id);
             holder.textView.setEnabled(!checked);
             holder.imageViewCheckMark.setVisibility(checked ? View.VISIBLE : View.GONE);
-
             return convertView;
         }
 
@@ -637,26 +516,20 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             Holder holder;
-
             if (convertView == null) {
                 convertView = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_area, parent, false);
-
                 holder = new Holder();
                 holder.textView = (TextView) convertView.findViewById(R.id.textView);
                 holder.imageViewCheckMark = (ImageView) convertView.findViewById(R.id.imageViewCheckMark);
-
                 convertView.setTag(holder);
             } else {
                 holder = (Holder) convertView.getTag();
             }
-
             JdCity item = getItem(position);
             holder.textView.setText(item.name);
-
             boolean checked = mCitySelectIndex != INDEX_INVALID && mCityData.get(mCitySelectIndex).id.equals(item.id);
             holder.textView.setEnabled(!checked);
             holder.imageViewCheckMark.setVisibility(checked ? View.VISIBLE : View.GONE);
-
             return convertView;
         }
 
@@ -686,26 +559,20 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             Holder holder;
-
             if (convertView == null) {
                 convertView = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_area, parent, false);
-
                 holder = new Holder();
                 holder.textView = (TextView) convertView.findViewById(R.id.textView);
                 holder.imageViewCheckMark = (ImageView) convertView.findViewById(R.id.imageViewCheckMark);
-
                 convertView.setTag(holder);
             } else {
                 holder = (Holder) convertView.getTag();
             }
-
             JdCounty item = getItem(position);
             holder.textView.setText(item.name);
-
             boolean checked = mCountySelectIndex != INDEX_INVALID && mCountyData.get(mCountySelectIndex).id.equals(item.id);
             holder.textView.setEnabled(!checked);
             holder.imageViewCheckMark.setVisibility(checked ? View.VISIBLE : View.GONE);
-
             return convertView;
         }
 
@@ -735,26 +602,20 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             Holder holder;
-
             if (convertView == null) {
                 convertView = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_area, parent, false);
-
                 holder = new Holder();
                 holder.textView = (TextView) convertView.findViewById(R.id.textView);
                 holder.imageViewCheckMark = (ImageView) convertView.findViewById(R.id.imageViewCheckMark);
-
                 convertView.setTag(holder);
             } else {
                 holder = (Holder) convertView.getTag();
             }
-
             JdStreet item = getItem(position);
             holder.textView.setText(item.name);
-
             boolean checked = mStreetSelectIndex != INDEX_INVALID && mStreetData.get(mStreetSelectIndex).id.equals(item.id);
             holder.textView.setEnabled(!checked);
             holder.imageViewCheckMark.setVisibility(checked ? View.VISIBLE : View.GONE);
-
             return convertView;
         }
 
@@ -784,26 +645,20 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             Holder holder;
-
             if (convertView == null) {
                 convertView = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_area, parent, false);
-
                 holder = new Holder();
                 holder.textView = (TextView) convertView.findViewById(R.id.textView);
                 holder.imageViewCheckMark = (ImageView) convertView.findViewById(R.id.imageViewCheckMark);
-
                 convertView.setTag(holder);
             } else {
                 holder = (Holder) convertView.getTag();
             }
-
             JdVillage item = getItem(position);
             holder.textView.setText(item.name);
-
             boolean checked = mVillageSelectIndex != INDEX_INVALID && mVillageData.get(mVillageSelectIndex).id.equals(item.id);
             holder.textView.setEnabled(!checked);
             holder.imageViewCheckMark.setVisibility(checked ? View.VISIBLE : View.GONE);
-
             return convertView;
         }
 
@@ -926,7 +781,108 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         updateIndicator();
     }
 
+    private void updateSelectorData(int updateWhat, Object updateData) {
+        if (!(updateData instanceof List)) {
+            return;
+        }
+        switch (updateWhat) {
+            case WHAT_PROVINCES_PROVIDED:
+                //更新--省--数据
+                mProvinceData = (List<JdProvince>) updateData;
+                mListView.setAdapter(mProvinceAdapter);
+                mProvinceAdapter.notifyDataSetChanged();
+                break;
+            case WHAT_CITIES_PROVIDED:
+                //更新--市--数据
+                mCityData = (List<JdCity>) updateData;
+                mCityAdapter.notifyDataSetChanged();
+                if (ListUtils.notEmpty(mCityData)) {
+                    // 以次级内容更新列表
+                    mListView.setAdapter(mCityAdapter);
+                    // 更新索引为次级
+                    mTabIndex = INDEX_TAB_CITY;
+                    // 缓存省-市数据
+                    String provinceId = mCityData.get(0).parentId;
+                    if (!mProvince2city.containsKey(provinceId)) {
+                        List<JdCity> cityList = new ArrayList<>();
+                        ListUtils.copy(mCityData, cityList);
+                        mProvince2city.put(provinceId, cityList);
+                    }
+                } else {
+                    // 次级无内容，回调
+                    callbackInternal();
+                }
+                break;
+            case WHAT_COUNTIES_PROVIDED:
+                //更新--区--数据
+                mCountyData = (List<JdCounty>) updateData;
+                mCountyAdapter.notifyDataSetChanged();
+                if (ListUtils.notEmpty(mCountyData)) {
+                    mListView.setAdapter(mCountyAdapter);
+                    mTabIndex = INDEX_TAB_COUNTY;
+                    // 缓存市-区数据
+                    String cityId = mCountyData.get(0).parentId;
+                    if (!mCity2county.containsKey(cityId)) {
+                        List<JdCounty> countyList = new ArrayList<>();
+                        ListUtils.copy(mCountyData, countyList);
+                        mCity2county.put(cityId, countyList);
+                    }
+                } else {
+                    callbackInternal();
+                }
+                break;
+            case WHAT_STREETS_PROVIDED:
+                //更新--街道--数据
+                mStreetData = (List<JdStreet>) updateData;
+                mStreetAdapter.notifyDataSetChanged();
+                if (ListUtils.notEmpty(mStreetData)) {
+                    mListView.setAdapter(mStreetAdapter);
+                    mTabIndex = INDEX_TAB_STREET;
+                    // 缓存区-街道数据
+                    String countryId = mStreetData.get(0).parentId;
+                    if (!mCounty2street.containsKey(countryId)) {
+                        List<JdStreet> streetList = new ArrayList<>();
+                        ListUtils.copy(mStreetData, streetList);
+                        mCounty2street.put(countryId, streetList);
+                    }
+                } else {
+                    callbackInternal();
+                }
+                break;
+            case WHAT_VILLAGES_PROVIDED:
+                //更新--村--数据
+                mVillageData = (List<JdVillage>) updateData;
+                mVillageAdapter.notifyDataSetChanged();
+                if (ListUtils.notEmpty(mVillageData)) {
+                    // 以次级内容更新列表
+                    mListView.setAdapter(mVillageAdapter);
+                    // 更新索引为次级
+                    mTabIndex = INDEX_TAB_VILLAGE;
+                    // 缓存街道-村数据
+                    String streetId = mVillageData.get(0).parentId;
+                    if (!mStreet2Village.containsKey(streetId)) {
+                        List<JdVillage> villageList = new ArrayList<>();
+                        ListUtils.copy(mVillageData, villageList);
+                        mStreet2Village.put(streetId, villageList);
+                    }
+                } else {
+                    // 次级无内容，回调
+                    callbackInternal();
+                }
+                break;
+            default:
+                break;
+        }
+        updateTabsVisibility();
+        updateProgressVisibility();
+        updateIndicator();
+    }
+
     //--------------------------------------对外方法api------------------------------------------------
+
+    public View getSelectorView() {
+        return mSelectorView;
+    }
 
     /**
      * 选择器关闭时清空缓存，默认不清空
@@ -981,7 +937,7 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
      * @param provinceList 省份列表
      */
     public void setProvinces(List<JdProvince> provinceList) {
-        mHandler.sendMessage(Message.obtain(mHandler, WHAT_PROVINCES_PROVIDED, provinceList));
+        updateSelectorData(WHAT_PROVINCES_PROVIDED, provinceList);
     }
 
     /**
@@ -990,7 +946,7 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
      * @param cityList 城市列表
      */
     public void setCities(List<JdCity> cityList) {
-        mHandler.sendMessage(Message.obtain(mHandler, WHAT_CITIES_PROVIDED, cityList));
+        updateSelectorData(WHAT_CITIES_PROVIDED, cityList);
     }
 
     /**
@@ -999,7 +955,7 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
      * @param countyList 区/县列表
      */
     public void setCounties(List<JdCounty> countyList) {
-        mHandler.sendMessage(Message.obtain(mHandler, WHAT_COUNTIES_PROVIDED, countyList));
+        updateSelectorData(WHAT_COUNTIES_PROVIDED, countyList);
     }
 
     /**
@@ -1008,7 +964,7 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
      * @param streetList 街道列表
      */
     public void setStreets(List<JdStreet> streetList) {
-        mHandler.sendMessage(Message.obtain(mHandler, WHAT_STREETS_PROVIDED, streetList));
+        updateSelectorData(WHAT_STREETS_PROVIDED, streetList);
     }
 
     /**
@@ -1017,7 +973,7 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
      * @param villageList 村列表
      */
     public void setVillages(List<JdVillage> villageList) {
-        mHandler.sendMessage(Message.obtain(mHandler, WHAT_VILLAGES_PROVIDED, villageList));
+        updateSelectorData(WHAT_VILLAGES_PROVIDED, villageList);
     }
 
 
@@ -1061,14 +1017,29 @@ public class JdAddressSelector implements AdapterView.OnItemClickListener {
         mLoadingPb.setVisibility(View.GONE);
     }
 
-
-    public interface OnCloseClickListener {
-        void onCloseClick();
+    /**
+     * 确定回调
+     */
+    public interface OnJdConfirmClickListener {
+        void onJdConfirmClick();
     }
 
-    private OnCloseClickListener onCloseClickListener;
+    private OnJdConfirmClickListener mOnJdConfirmClickListener;
 
-    public void setOnCloseClickListener(OnCloseClickListener onCloseClickListener) {
-        this.onCloseClickListener = onCloseClickListener;
+    public void setOnJdConfirmClickListener(OnJdConfirmClickListener onConfirmClickListener) {
+        this.mOnJdConfirmClickListener = onConfirmClickListener;
+    }
+
+    /**
+     * 取消回调
+     */
+    public interface OnJdCancelClickListener{
+        void onCancel();
+    }
+
+    private OnJdCancelClickListener mJdCancelClickListener;
+
+    public void setJdCancelClickListener(OnJdCancelClickListener jdCancelClickListener) {
+        mJdCancelClickListener = jdCancelClickListener;
     }
 }

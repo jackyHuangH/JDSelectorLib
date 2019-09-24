@@ -40,8 +40,8 @@ public class JdSelectorDialog extends Dialog {
     private void init(Context context) {
         mSelector = new JdAddressSelector(context);
 
-        setContentView(mSelector.getmSelectorView());
-
+        setContentView(mSelector.getSelectorView());
+        //设置dialog宽高
         Window window = getWindow();
         WindowManager.LayoutParams params = window.getAttributes();
         params.width = WindowManager.LayoutParams.MATCH_PARENT;
@@ -50,9 +50,16 @@ public class JdSelectorDialog extends Dialog {
 
         window.setGravity(Gravity.BOTTOM);
 
-        mSelector.setOnCloseClickListener(new JdAddressSelector.OnCloseClickListener() {
+        mSelector.setJdCancelClickListener(new JdAddressSelector.OnJdCancelClickListener() {
             @Override
-            public void onCloseClick() {
+            public void onCancel() {
+                dismiss();
+            }
+        });
+
+        mSelector.setOnJdConfirmClickListener(new JdAddressSelector.OnJdConfirmClickListener() {
+            @Override
+            public void onJdConfirmClick() {
                 dismiss();
             }
         });
